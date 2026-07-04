@@ -1,71 +1,74 @@
 # Quorum
 
-A Go implementation of the [Raft consensus algorithm](https://raft.github.io/raft.pdf) with built-in observability. Quorum implements the core Raft protocol with a replicated in-memory key-value store, allowing you to start a real cluster, run a predefined workload, and inspect consensus and performance metrics through Prometheus.
+[![CI](https://github.com/ryanssenn/quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanssenn/quorum/actions/workflows/ci.yml)
 
+An implementation of the [Raft consensus algorithm](https://raft.github.io/raft.pdf) in Go.
 
-## Raft implementation
+Raft is a consensus algorithm that allows a cluster of servers to agree on the same sequence of operations, even if some of them fail. Instead of allowing every server to accept writes independently, Raft elects one server as the leader. Every write goes through that leader, which records it in its log and sends it to the other servers.
 
-Implements the core Raft protocol from the original paper, including:
+A write is only considered committed after a majority of the servers have stored it. At that point, every server eventually applies the write in the same order, guaranteeing that they all reach the same state. If the leader crashes, the remaining servers automatically elect a new leader and continue from the last committed state without losing data.
 
-- Leader election
-- Log replication
-- Persistent state
-- Log compaction through state-machine snapshots
-- `InstallSnapshot` RPC for catching up far-behind followers
-
-The replicated state machine is a simple in-memory key-value store.
-
-Implementation guide: [docs/guide.md](docs/guide.md)
-
-## Benchmarks
-
-Results from a 3-node cluster on a single host ([full report](benchmarks/REPORT.md)); measured on a Cursor Cloud VM (4 vCPUs, 16 GB RAM, Go 1.24.0) with all nodes communicating over loopback.
-
-| Metric                          | Result          |
-| ------------------------------- | --------------- |
-| Peak read throughput            | 94,501 ops/s    |
-| Write throughput (64 clients)   | 28,096 ops/s    |
-| Read latency, p99 (16 clients)  | 1.04 ms         |
-| Write latency, p99 (16 clients) | 2.8 ms          |
-| Leader failover recovery        | ~1.4 s          |
-
-These numbers measure implementation overhead on a single machine rather than network performance across multiple hosts.
-
-The write path (consensus, log replication, and disk persistence) was profiled, optimized, and benchmarked before and after every change. Optimizations that did not produce repeatable improvements were reverted.
-
-Full methodology, including benchmark configuration, optimization results, and reverted experiments, is documented in [OPTIMIZATIONS.md](OPTIMIZATIONS.md).
-
-To reproduce the benchmarks:
-
-```bash
-go run ./benchmarks --quick --concurrency=1,16,64
-```
-
-## Observability
+## Demo
 
 <img width="800" height="404" alt="quorum_demo" src="https://github.com/user-attachments/assets/4eb1e2e3-e883-48a3-996a-cb1ad600c111" />
 
-The clip above is the playground: a single-command dashboard that boots a real multi-node Raft cluster and drives it with a stress-test workload (concurrent writers, node kills, and leader failover) while Prometheus scrapes every node. It renders live throughput, latency, and leadership/quorum charts next to an animated topology that shows client requests, log replication, and elections as they happen.
-
-Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/) must be running (used to start Prometheus).
+The playground starts a multi-node Raft cluster, drives it with a stress-test workload (concurrent writers, node failures, and leader failover), and exposes live metrics through Prometheus. Alongside the metrics, it renders an animated topology showing client requests, log replication, and leader elections as they happen.
 
 ```bash
 go run ./playground
 ```
 
-Metrics are documented in [docs/observability.md](docs/observability.md).
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (used to start Prometheus). Metrics are documented in [docs/observability.md](docs/observability.md).
+
+## Features
+
+Implements the core Raft protocol from the original paper:
+
+- Leader election with randomized timeouts to reduce split votes
+- Log replication with majority-based commits
+- Persistent state and crash recovery
+- Snapshotting and log compaction
+- InstallSnapshot RPC for followers that fall behind compacted logs
+
+Nodes communicate over gRPC. Clients use a small HTTP API and can connect to any node; followers automatically forward requests to the current leader. The replicated state machine is a simple in-memory key-value store.
+
+For a guided tour of the code (including a complete write traced from HTTP to disk), see [docs/guide.md](docs/guide.md).
+
+## Benchmarks
+
+Results from a 3-node cluster running on a single VM (4 vCPUs, 16 GB RAM, Go 1.24.0), with all nodes communicating over loopback.
+
+| Metric                              | Result       |
+| ----------------------------------- | ------------ |
+| Peak read throughput (64 clients)   | 94,501 ops/s |
+| Peak write throughput (64 clients)  | 28,096 ops/s |
+| Read latency, p99 (16 clients)      | 1.04 ms      |
+| Write latency, p99 (16 clients)     | 2.8 ms       |
+| Leader failover recovery (mean)     | ~1.4 s       |
+
+These numbers measure implementation overhead on a single machine rather than network performance across multiple hosts. The gap between the two throughput rows is the cost of consensus: a read is an in-memory lookup on the leader, while a write must reach disk and a majority of nodes before it returns. Failover recovery measures the time from killing the leader under load until a write commits successfully on a surviving node, with no manual intervention.
+
+The write path (consensus, log replication, and disk persistence) was profiled and optimized incrementally. Group commit, batched fsync, and replication wake-ups increased write throughput by roughly 8× over the initial implementation. Every optimization was benchmarked before and after; changes that did not produce repeatable improvements were reverted. Full methodology, including the reverted experiments, is documented in [OPTIMIZATIONS.md](OPTIMIZATIONS.md).
+
+To reproduce:
+
+```bash
+go run ./benchmarks --quick --concurrency=1,16,64
+```
 
 ## Tests
 
 ```bash
-go test -race ./core
-go test -v ./test
-go test ./playground/...
+go test -race ./core      # unit tests: elections, commit/apply, voting, persistence
+go test -v ./test         # integration: real 5-node cluster; failover, restarts, snapshot catch-up
+go test ./playground/...  # playground harness and API
 ```
 
-## Running a cluster manually
+The integration suite builds the binary, launches a live cluster as subprocesses, kills leaders under load, restarts nodes, and verifies that committed data survives.
 
-Each node exposes an HTTP API on `--port`. Raft RPC addresses are configured through `--peers` using the format `id=host:port`. At least three nodes are required.
+## Manual setup
+
+Each node exposes an HTTP API on `--port`. Raft RPC addresses are configured through `--peers` using the format `id=host:port`. A majority of the configured nodes must be up to commit writes; three is the minimum that survives a node failure.
 
 ```bash
 go build -o quorum .
@@ -77,9 +80,20 @@ go build -o quorum .
   --reset=true
 ```
 
+Start `node2` and `node3` the same way with their own `--id` and `--port`. Use `--reset=false` on restart to recover from the persisted log. Then send requests to any node; followers automatically forward them to the leader.
+
+```bash
+curl "http://127.0.0.1:8001/put?key=foo&value=bar"
+curl "http://127.0.0.1:8002/get?key=foo"
+curl "http://127.0.0.1:8003/status"
+```
+
 Each node exposes Prometheus metrics at `/metrics`. Disable metrics with `--metrics=false`.
 
 ## Limitations
 
-- Dynamic cluster membership
-- Segmented log files (compaction currently rewrites a single log file)
+Quorum implements the full core protocol but stops where a production system would continue.
+
+- **Cluster membership is fixed at startup.** Adding or removing a node requires restarting the cluster with a new `--peers` list. Raft's joint-consensus membership changes are not implemented.
+- **Reads are not fully linearizable.** The leader waits for its applied state to catch up to the commit index before serving reads, but there is no read-index or lease protocol to prevent a deposed leader from serving stale data during a network partition.
+- **The log is a single file.** Compaction rewrites the entire `.rlog` in place rather than rotating segments, so compaction cost grows with the size of the retained log.
