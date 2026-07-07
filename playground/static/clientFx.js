@@ -1,3 +1,5 @@
+import { clientLinkPoints } from "./renderer.js";
+
 const MAX_DOTS = 24;
 const pool = [];
 
@@ -29,7 +31,6 @@ export class ClientFx {
     if (this.intensity <= 0) this.accum = 0;
   }
 
-  /** Immediately remove all in-flight request dots. */
   clear() {
     this.accum = 0;
     while (this.layer.firstChild) {
@@ -37,7 +38,6 @@ export class ClientFx {
     }
   }
 
-  /** Roughly track req/s: ~1 visible dot per 150 requests/sec, capped for clarity */
   _spawnRate() {
     if (!this.active || this.intensity <= 0) return 0;
     const effective = this.rate * this.intensity;
@@ -70,9 +70,9 @@ export class ClientFx {
 
     const dx = this.to.x - this.from.x;
     const dy = this.to.y - this.from.y;
-    const jitter = (Math.random() - 0.5) * 6;
+    const jitter = (Math.random() - 0.5) * 4;
     dot.style.left = `${this.from.x + jitter}px`;
-    dot.style.top = `${this.from.y + jitter * 0.4}px`;
+    dot.style.top = `${this.from.y + jitter * 0.3}px`;
     dot.style.setProperty("--dx", `${dx}px`);
     dot.style.setProperty("--dy", `${dy}px`);
     const travel = Math.hypot(dx, dy);
@@ -94,15 +94,13 @@ export function canvasPoint(p, bounds, rect) {
   };
 }
 
-export function leaderTarget(pos, leaderId, bounds, rect) {
-  const lp = pos[leaderId] || pos._leaderSlot;
-  if (!lp) return null;
-  const edge = (lp.scale || 1) * 36;
-  return canvasPoint({ x: lp.x, y: lp.y - edge }, bounds, rect);
-}
-
-export function clientSource(pos, bounds, rect) {
-  const cp = pos.client;
-  if (!cp) return null;
-  return canvasPoint({ x: cp.x + 36, y: cp.y }, bounds, rect);
+export function clientRoute(pos, leaderId, bounds, rect) {
+  const client = pos.client;
+  const leader = pos[leaderId] || pos._leaderSlot;
+  if (!client || !leader) return { from: null, to: null };
+  const pts = clientLinkPoints(client, leader);
+  return {
+    from: canvasPoint(pts.from, bounds, rect),
+    to: canvasPoint(pts.to, bounds, rect),
+  };
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/ryansenn/quorum/proto/nodepb"
+	pb "github.com/ryanssenn/quorum/proto/nodepb"
 )
 
 // maxEntriesPerAppend bounds how many log entries the leader sends in a single

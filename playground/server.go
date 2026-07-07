@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ryansenn/quorum/internal/harness"
+	"github.com/ryanssenn/quorum/internal/harness"
 )
 
 type Server struct {

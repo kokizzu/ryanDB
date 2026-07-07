@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	pb "github.com/ryansenn/quorum/proto/nodepb"
+	pb "github.com/ryanssenn/quorum/proto/nodepb"
 )
 
 // SnapshotThreshold is the number of applied entries that must accumulate beyond

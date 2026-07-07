@@ -11,7 +11,7 @@
 //	go run ./benchmarks                 # full suite, results in benchmarks/results/
 //	go run ./benchmarks --quick         # shorter durations for a smoke run
 //
-// See benchmarks/README.md for details.
+// See docs/benchmarks/README.md for details.
 package main
 
 import (
@@ -32,7 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ryansenn/quorum/internal/harness"
+	"github.com/ryanssenn/quorum/internal/harness"
 )
 
 // ---------------------------------------------------------------------------

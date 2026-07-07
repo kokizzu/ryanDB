@@ -2,16 +2,18 @@
 
 Throughput, latency, and failover numbers for the replicated key-value store, measured on a single host. Reproduce with `go run ./benchmarks` then `python3 benchmarks/plot.py` (options in [README.md](README.md)).
 
-Every run uses closed-loop load: *N* worker goroutines each send a request, wait for the reply, and repeat for a 5-second window after warmup. Throughput is completed operations over wall time; latency is the per-request round trip. Read benchmarks preload 2,000 keys. Log compaction is turned off (a high `--snapshot-threshold`) so the write path reflects pure consensus cost; compaction is measured on its own in [OPTIMIZATIONS.md](../OPTIMIZATIONS.md).
+Graphs below reference `benchmarks/results/img/*.png`. Those files are generated locally and not committed; run the harness and `plot.py` to produce them.
+
+Every run uses closed-loop load: *N* worker goroutines each send a request, wait for the reply, and repeat for a 5-second window after warmup. Throughput is completed operations over wall time; latency is the per-request round trip. Read benchmarks preload 2,000 keys. Log compaction is turned off (a high `--snapshot-threshold`) so the write path reflects pure consensus cost; compaction is measured on its own in [optimizations.md](../performance/optimizations.md).
 
 Environment: Cursor Cloud VM (4 vCPUs, 16 GB RAM), Go 1.24.0, all nodes as local processes over loopback. Absolute numbers are host-specific; the asymmetries and order-of-magnitude gaps are what carry over. Two things shape how to read the rest of this:
 
-- **Loopback, not a network.** Replication never leaves the machine, so a real deployment adds inter-node RTT to every write and to failover.
-- **Closed-loop load hides the tail.** When the server slows, the clients slow with it, so the p99 figures here are closer to a lower bound than what an open-loop generator would show.
+- Loopback, not a network. Replication never leaves the machine, so a real deployment adds inter-node RTT to every write and to failover.
+- Closed-loop load hides the tail. When the server slows, the clients slow with it, so the p99 figures here are closer to a lower bound than what an open-loop generator would show.
 
 ## Reads vs writes
 
-![Throughput vs concurrency](results/img/throughput_vs_concurrency.png)
+![Throughput vs concurrency](../../benchmarks/results/img/throughput_vs_concurrency.png)
 
 | Concurrency | Write ops/sec | Read ops/sec | Ratio |
 |---:|---:|---:|---:|
@@ -28,7 +30,7 @@ Reads run 3–12× faster than writes: a read is an in-memory map lookup on the 
 
 ### Writes (PUT, full commit path)
 
-![Write latency percentiles](results/img/write_latency_percentiles.png)
+![Write latency percentiles](../../benchmarks/results/img/write_latency_percentiles.png)
 
 | Concurrency | p50 (ms) | p95 (ms) | p99 (ms) |
 |---:|---:|---:|---:|
@@ -42,7 +44,7 @@ A write commits in well under a millisecond at low concurrency (p50 0.47 ms at o
 
 ### Reads (GET, leader memory)
 
-![Read latency percentiles](results/img/read_latency_percentiles.png)
+![Read latency percentiles](../../benchmarks/results/img/read_latency_percentiles.png)
 
 | Concurrency | p50 (ms) | p95 (ms) | p99 (ms) |
 |---:|---:|---:|---:|
@@ -54,7 +56,7 @@ Sub-millisecond at low load, low single-digit p99 under load. No consensus, no d
 
 ## Follower forwarding
 
-![Routing comparison](results/img/routing_comparison.png)
+![Routing comparison](../../benchmarks/results/img/routing_comparison.png)
 
 | Target | Throughput (ops/sec) | p50 (ms) | p99 (ms) |
 |---|---:|---:|---:|
@@ -65,7 +67,7 @@ A write sent to a follower is forwarded to the leader over gRPC, costing ~24% th
 
 ## Cluster size
 
-![Cluster size comparison](results/img/cluster_size_comparison.png)
+![Cluster size comparison](../../benchmarks/results/img/cluster_size_comparison.png)
 
 | Cluster size | Throughput (ops/sec) | p50 (ms) | p99 (ms) |
 |---|---:|---:|---:|
@@ -76,7 +78,7 @@ At 16 clients (leader-direct), three nodes sustain ~13.8k writes/sec versus ~11.
 
 ## Failover
 
-![Failover recovery](results/img/failover_recovery.png)
+![Failover recovery](../../benchmarks/results/img/failover_recovery.png)
 
 | Trial | Leader change | Recovery (ms) |
 |---|---|---:|
@@ -85,4 +87,4 @@ At 16 clients (leader-direct), three nodes sustain ~13.8k writes/sec versus ~11.
 | 3 | node2 → node1 | 2,142 |
 | Mean | | 1,401 |
 
-The leader is killed mid-load; recovery is the time from the kill until a write commits on a surviving node. It is dominated by the randomized **600–1000 ms** election timeout: a follower has to ride out its timeout before standing for election, and if the first round splits the vote another timeout elapses before a leader emerges. That makes the figure noisy: across repeated runs it landed anywhere from ~0.7 s (one clean election) to ~3.4 s (a split round plus a retry), averaging roughly 1.4 s here. No manual intervention is needed for writes to resume.
+The leader is killed mid-load; recovery is the time from the kill until a write commits on a surviving node. It is dominated by the randomized 600–1000 ms election timeout: a follower has to ride out its timeout before standing for election, and if the first round splits the vote another timeout elapses before a leader emerges. That makes the figure noisy: across repeated runs it landed anywhere from ~0.7 s (one clean election) to ~3.4 s (a split round plus a retry), averaging roughly 1.4 s here. No manual intervention is needed for writes to resume.

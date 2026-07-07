@@ -30,7 +30,7 @@ Each node exposes Prometheus metrics at `/metrics`. The playground aggregates cl
 | `quorum_log_length` | Gauge | `node` | Number of log entries | Line; divergence hints replication issues |
 | `up{job="quorum"}` | Gauge | `instance` | Scrape success | Node up/down table |
 
-**Useful PromQL**
+Useful PromQL
 
 ```promql
 # Current leader
@@ -55,7 +55,7 @@ quorum_commit_index - quorum_last_applied
 | `quorum_cluster_nodes` | Gauge | - | Playground | Configured cluster size |
 | `quorum_nodes_running` | Gauge | - | Playground | Processes currently up |
 
-**Useful PromQL**
+Useful PromQL
 
 ```promql
 # Split brain or no leader
@@ -79,7 +79,7 @@ count(up{job="quorum"} == 1)
 | `quorum_append_entries_total` | Counter | `node`, `result` | AppendEntries outcomes | Stacked area by result |
 | `quorum_requestvote_total` | Counter | `node`, `result` | Vote RPC outcomes | Line by result |
 
-**Useful PromQL**
+Useful PromQL
 
 ```promql
 rate(quorum_elections_total[1m])
@@ -101,7 +101,7 @@ rate(quorum_requestvote_total{result="granted"}[1m])
 | `quorum_scenario_step` | Gauge | `scenario` | Current step index | Stat panel |
 | `quorum_scenario_running` | Gauge | - | 1 if scenario active | Stat panel |
 
-**Useful PromQL**
+Useful PromQL
 
 ```promql
 sum by (op) (rate(quorum_client_requests_total[1m]))
@@ -114,28 +114,28 @@ histogram_quantile(0.99, sum by (le, op) (rate(quorum_client_request_duration_se
 
 ### Row 1: Cluster health
 
-- **Leader count** - `quorum_leader_count` (threshold: green=1, red otherwise)
-- **Current term** - `max(quorum_term)`
-- **Nodes running** - `quorum_nodes_running / quorum_cluster_nodes`
-- **Commit spread** - `max(quorum_commit_index) - min(quorum_commit_index)`
+- Leader count - `quorum_leader_count` (threshold: green=1, red otherwise)
+- Current term - `max(quorum_term)`
+- Nodes running - `quorum_nodes_running / quorum_cluster_nodes`
+- Commit spread - `max(quorum_commit_index) - min(quorum_commit_index)`
 
 ### Row 2: Consensus and replication
 
-- **Commit index by node** - `quorum_commit_index`
-- **Replication lag by node** - `quorum_replication_lag`
-- **Apply lag by node** - `quorum_apply_lag`
+- Commit index by node - `quorum_commit_index`
+- Replication lag by node - `quorum_replication_lag`
+- Apply lag by node - `quorum_apply_lag`
 
 ### Row 3: Activity and stability
 
-- **Election rate** - `rate(quorum_elections_total[1m])`
-- **Commit rate** - `rate(quorum_commits_total[1m])`
-- **AppendEntries success vs failure** - rates by `result`
+- Election rate - `rate(quorum_elections_total[1m])`
+- Commit rate - `rate(quorum_commits_total[1m])`
+- AppendEntries success vs failure - rates by `result`
 
 ### Row 4: Scenario context
 
-- **Scenario step** - `quorum_scenario_step`
-- **Scenario running** - `quorum_scenario_running`
-- **Annotations**: kill, partition, load bursts marked by the playground
+- Scenario step - `quorum_scenario_step`
+- Scenario running - `quorum_scenario_running`
+- Annotations: kill, partition, load bursts marked by the playground
 
 ### Row 5: Node table
 
@@ -174,13 +174,13 @@ histogram_quantile(0.99, sum by (le, op) (rate(quorum_client_request_duration_se
 
 ## H. Startup
 
-**Prerequisite:** Docker Desktop must be running.
+Docker Desktop must be running.
 
 ```bash
 go run ./playground
 ```
 
-Single command: starts Prometheus, boots a 5-node cluster, runs `full-demo.json`, opens the browser with metrics charts.
+Starts Prometheus and opens the browser at http://localhost:8080. Click Run stress test to launch a 5-node cluster and run `full-demo.json`, or pass `--bootstrap` to auto-start the cluster on launch.
 
 Live metrics API: `GET /api/metrics/live` (write/read throughput, p99 latency, replication lag, failover ms).
 

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ryansenn/quorum/internal/harness"
+	"github.com/ryanssenn/quorum/internal/harness"
 )
 
 func TestPlaygroundAPI(t *testing.T) {

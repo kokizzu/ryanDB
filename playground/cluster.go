@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ryansenn/quorum/internal/harness"
+	"github.com/ryanssenn/quorum/internal/harness"
 )
 
 type ClusterNode struct {

@@ -39,4 +39,4 @@ When you configure or start a cluster, the playground writes `monitoring/targets
 
 ## Metrics reference
 
-See [docs/observability.md](../docs/observability.md).
+See [docs/observability.md](../docs/observability.md). Full documentation index: [docs/README.md](../docs/README.md).

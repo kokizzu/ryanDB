@@ -1,4 +1,4 @@
-import { SVG_NS } from "./renderer.js";
+import { SVG_NS, linkPoints, clientLinkPoints } from "./renderer.js";
 
 const FLOW_COLORS = {
   put: "#5e8fb5",
@@ -26,14 +26,20 @@ export class AnimationEngine {
   }
 
   spawnFlow(from, to, pos, type, opts = {}) {
+    if (opts.fromPoint && opts.toPoint) {
+      this._spawnFlowPoints(opts.fromPoint, opts.toPoint, type, opts);
+      return;
+    }
+    const endpoints = resolveEndpoints(from, to, pos);
+    if (!endpoints) return;
+    this._spawnFlowPoints(endpoints.from, endpoints.to, type, opts);
+  }
+
+  _spawnFlowPoints(fp, tp, type, opts = {}) {
     if (this.flows.length >= MAX_FLOWS) {
       const oldest = this.flows.shift();
       oldest?.g?.remove();
     }
-
-    const fp = this._point(from, pos, "from");
-    const tp = this._point(to, pos, "to");
-    if (!fp || !tp) return;
 
     const curve = opts.curve ?? 22;
     const mid = {
@@ -53,7 +59,7 @@ export class AnimationEngine {
     trail.setAttribute("fill", "none");
     trail.setAttribute("stroke", color);
     trail.setAttribute("stroke-width", "1");
-    trail.setAttribute("opacity", "0.12");
+    trail.setAttribute("opacity", type === "append" ? "0" : "0.08");
     g.appendChild(trail);
 
     const dot = document.createElementNS(SVG_NS, "circle");
@@ -79,11 +85,24 @@ export class AnimationEngine {
   }
 
   /** Leader → followers replication burst */
-  spawnReplication(leaderId, followerIds, pos) {
-    if (!leaderId || !pos[leaderId]) return;
+  spawnReplication(leaderId, followerIds, pos, opts = {}) {
+    const leader = pos[leaderId];
+    if (!leader) return;
+
+    const hub = pos.client ? clientLinkPoints(pos.client, leader).to : null;
+
     for (const fid of followerIds) {
       if (fid === leaderId || !pos[fid]) continue;
-      this.spawnFlow(leaderId, fid, pos, "append", { curve: 22 });
+      if (hub) {
+        const tp = linkPoints(leader, pos[fid]).to;
+        this.spawnFlow(leaderId, fid, pos, "append", {
+          ...opts,
+          fromPoint: hub,
+          toPoint: tp,
+        });
+      } else {
+        this.spawnFlow(leaderId, fid, pos, "append", opts);
+      }
     }
   }
 
@@ -125,18 +144,17 @@ export class AnimationEngine {
       this.raf = null;
     }
   }
+}
 
-  _point(id, pos, role) {
-    if (id === "client") {
-      const p = pos.client;
-      return p ? { x: p.x + 40, y: p.y } : null;
-    }
-    const p = pos[id];
-    if (!p) return null;
-    const edge = (p.scale || 1) * 40;
-    if (role === "from") {
-      return { x: p.x, y: p.y + edge * 0.3 };
-    }
-    return { x: p.x, y: p.y - edge };
+function resolveEndpoints(fromId, toId, pos) {
+  if (fromId === "client") {
+    const client = pos.client;
+    const to = pos[toId];
+    if (!client || !to) return null;
+    return clientLinkPoints(client, to);
   }
+  const from = pos[fromId];
+  const to = pos[toId];
+  if (!from || !to) return null;
+  return linkPoints(from, to);
 }

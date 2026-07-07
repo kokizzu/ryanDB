@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ryansenn/quorum/internal/harness"
+	"github.com/ryanssenn/quorum/internal/harness"
 )
 
 // Prevent integration tests from hanging until go test's default timeout.
