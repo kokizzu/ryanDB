@@ -1,6 +1,6 @@
 import { computeLayout, quorumNeeded } from "./layout.js";
 import { createLayers, Renderer } from "./renderer.js";
-import { ClientFx, clientSource, leaderTarget } from "./clientFx.js";
+import { ClientFx, clientRoute } from "./clientFx.js";
 import { AnimationEngine } from "./animation.js";
 import { updateMetricsStats, updateSidebarMetrics, updateSidebarCluster, mergeDisplayMetrics, showGrafanaHint } from "./metrics.js";
 import { initLiveCharts } from "./liveCharts.js";
@@ -8,11 +8,11 @@ import { initLiveCharts } from "./liveCharts.js";
 const layers = createLayers();
 const renderer = new Renderer(layers);
 const clientFx = new ClientFx(document.getElementById("fx-layer"));
-const replFx = new AnimationEngine(document.getElementById("layer-beams"));
+const replFx = new AnimationEngine(document.getElementById("layer-flows"));
 
 let liveCharts = null;
 let topologyBounds = { width: 1000, height: 420 };
-let selectedNodes = 5;
+let selectedNodes = 7;
 let lastLayoutSig = "";
 let lastScenarioSig = "";
 let lastMetricsStatsSig = "";
@@ -146,7 +146,7 @@ clientFx.onSpawn = () => {
     .filter((n) => n.running && n.id !== leaderId)
     .map((n) => n.id);
   if (followers.length > 0) {
-    replFx.spawnReplication(leaderId, followers, pos);
+    replFx.spawnReplication(leaderId, followers, pos, { curve: 22 });
   }
 };
 
@@ -250,13 +250,16 @@ async function waitForReady() {
 function resizeTopology() {
   const canvas = document.getElementById("topology-canvas");
   const svg = document.getElementById("topology-svg");
+  const flows = document.getElementById("topology-flows");
   if (!canvas || !svg) return;
   const rect = canvas.getBoundingClientRect();
   topologyBounds = {
     width: Math.max(320, rect.width),
     height: Math.max(180, rect.height),
   };
-  svg.setAttribute("viewBox", `0 0 ${topologyBounds.width} ${topologyBounds.height}`);
+  const viewBox = `0 0 ${topologyBounds.width} ${topologyBounds.height}`;
+  svg.setAttribute("viewBox", viewBox);
+  flows?.setAttribute("viewBox", viewBox);
   renderer.invalidateLayout();
   lastLayoutSig = "";
   if (lastClusterData) {
@@ -339,8 +342,7 @@ function updateFxRoute(pos, leaderId) {
   const canvas = document.getElementById("topology-canvas");
   if (!canvas || !pos?.client) return;
   const rect = canvas.getBoundingClientRect();
-  const from = clientSource(pos, topologyBounds, rect);
-  const to = leaderId ? leaderTarget(pos, leaderId, topologyBounds, rect) : null;
+  const { from, to } = clientRoute(pos, leaderId, topologyBounds, rect);
   clientFx.setRoute(from, to);
 }
 
@@ -391,8 +393,20 @@ function updateStatus(data, scenario) {
   idleOverlay?.classList.toggle("hidden", stressActive || data.clusterStarted);
 
   const writeCount = scenario?.writeCount ?? 0;
+  const clusterSize = nodes.length || selectedNodes;
+  const quorum = quorumNeeded(clusterSize);
+  const quorumWarning = document.getElementById("quorum-warning");
+  if (quorumWarning) {
+    const belowQuorum = data.clusterStarted && running.length < quorum;
+    quorumWarning.classList.toggle("hidden", !belowQuorum);
+    if (belowQuorum) {
+      quorumWarning.textContent =
+        `Need at least ${quorum} of ${clusterSize} nodes for replication`;
+    }
+  }
+
   document.getElementById("topology-stats").textContent = data.clusterStarted
-    ? `${running.length}/${nodes.length} up · quorum ${quorumNeeded(nodes.length || selectedNodes)} · ${writeCount} writes`
+    ? `${running.length}/${nodes.length} up · quorum ${quorum} · ${writeCount} writes`
     : "";
   updateSidebarCluster({
     writeCount,
@@ -428,10 +442,10 @@ function updateStatus(data, scenario) {
   const layoutSig = layoutSignature(data);
   const dataSig = dataSignature(data);
   const combined = layoutSig + "|" + dataSig;
+  renderer.clusterStarted = Boolean(data.clusterStarted);
   if (combined === lastLayoutSig) return;
   lastLayoutSig = combined;
 
-  renderer.clusterStarted = Boolean(data.clusterStarted);
   const pos = computeLayout(nodes, topologyBounds, Boolean(data.clusterStarted));
   renderer.syncNodes(nodes, pos, data.partitionNodes || [], topologyBounds);
   updateFxRoute(pos, renderer.leaderId);
@@ -560,7 +574,7 @@ function frameLoop(ts) {
   const ease = visualIntensity < 1 ? 5 : 14;
   displayRate += (targetRate - displayRate) * Math.min(1, dt * ease);
   tickVisualIntensity();
-  clientFx.setIntensity(visualIntensity);
+  clientFx.setIntensity(stressPhase !== "idle" ? visualIntensity : (loadActive ? 1 : 0));
   paintRateDisplay(displayRate);
   clientFx.tick(dt);
   tickClientFlows(dt);

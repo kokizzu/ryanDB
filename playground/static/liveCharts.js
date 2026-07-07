@@ -99,6 +99,8 @@ export class LiveCharts {
       `;
       container.appendChild(el);
       const canvas = el.querySelector("canvas");
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", `${def.label} chart`);
       return {
         def,
         el,

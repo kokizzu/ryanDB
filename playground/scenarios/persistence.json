@@ -1,6 +1,6 @@
 {
   "name": "Log Persistence",
-  "nodes": 5,
+  "nodes": 7,
   "steps": [
     { "wait": "2s" },
     { "put": { "node": "node2", "key": "persist:1", "value": "alpha" } },

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/ryansenn/quorum/core"
+	"github.com/ryanssenn/quorum/core"
 )
 
 var node *core.Node

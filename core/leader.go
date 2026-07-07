@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/ryansenn/quorum/proto/nodepb"
+	pb "github.com/ryanssenn/quorum/proto/nodepb"
 )
 
 // maxEntriesPerAppend bounds how many log entries the leader sends in a single
@@ -61,11 +61,11 @@ func (n *Node) Commit(cmd *Command) {
 }
 
 func (n *Node) StartReplicationWorkers() {
-	for key, _ := range n.MatchIndex {
-		n.MatchIndex[key].Store(0)
+	for key := range n.MatchIndex {
+		n.MatchIndex[key].Store(n.SnapshotIndex.Load())
 	}
 
-	for key, _ := range n.NextIndex {
+	for key := range n.NextIndex {
 		n.NextIndex[key].Store(int64(n.GetLogSize()))
 	}
 

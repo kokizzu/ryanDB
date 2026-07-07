@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/ryansenn/quorum/proto/nodepb"
+	pb "github.com/ryanssenn/quorum/proto/nodepb"
 )
 
 func testPeers() map[string]string {

@@ -36,7 +36,7 @@ For a guided tour of the code (including a complete write traced from HTTP to di
 
 ## Benchmarks
 
-Results from a 3-node cluster running on a single VM (4 vCPUs, 16 GB RAM, Go 1.24.0), with all nodes communicating over loopback.
+Results from a 3-node cluster running on a single VM (4 vCPUs, 16 GB RAM, Go 1.24.0), with all nodes communicating over loopback. Full methodology, tables, and graphs: [docs/benchmarks/REPORT.md](docs/benchmarks/REPORT.md).
 
 | Metric                              | Result       |
 | ----------------------------------- | ------------ |
@@ -48,7 +48,7 @@ Results from a 3-node cluster running on a single VM (4 vCPUs, 16 GB RAM, Go 1.2
 
 These numbers measure implementation overhead on a single machine rather than network performance across multiple hosts. The gap between the two throughput rows is the cost of consensus: a read is an in-memory lookup on the leader, while a write must reach disk and a majority of nodes before it returns. Failover recovery measures the time from killing the leader under load until a write commits successfully on a surviving node, with no manual intervention.
 
-The write path (consensus, log replication, and disk persistence) was profiled and optimized incrementally. Group commit, batched fsync, and replication wake-ups increased write throughput by roughly 8× over the initial implementation. Every optimization was benchmarked before and after; changes that did not produce repeatable improvements were reverted. Full methodology, including the reverted experiments, is documented in [OPTIMIZATIONS.md](OPTIMIZATIONS.md).
+Group commit, batched fsync, and replication wake-ups raised write throughput roughly 8× over the initial implementation. Per-change results and reverted experiments are in [docs/performance/optimizations.md](docs/performance/optimizations.md).
 
 To reproduce:
 
@@ -94,6 +94,6 @@ Each node exposes Prometheus metrics at `/metrics`. Disable metrics with `--metr
 
 Quorum implements the full core protocol but stops where a production system would continue.
 
-- **Cluster membership is fixed at startup.** Adding or removing a node requires restarting the cluster with a new `--peers` list. Raft's joint-consensus membership changes are not implemented.
-- **Reads are linearizable except during partitions.** The leader waits for its applied state to catch up to the commit index before serving reads, so clients always see committed writes in normal operation. There is no read-index or lease protocol, however, so a leader deposed during a network partition can serve stale reads until the partition heals.
-- **The log is a single file.** Compaction rewrites the entire `.rlog` in place rather than rotating segments, so compaction cost grows with the size of the retained log.
+- Cluster membership is fixed at startup. Adding or removing a node requires restarting the cluster with a new `--peers` list. Raft's joint-consensus membership changes are not implemented.
+- Reads are linearizable except during partitions. The leader waits for its applied state to catch up to the commit index before serving reads, so clients always see committed writes in normal operation. There is no read-index or lease protocol, however, so a leader deposed during a network partition can serve stale reads until the partition heals.
+- The log is a single file. Compaction rewrites the entire `.rlog` in place rather than rotating segments, so compaction cost grows with the size of the retained log.

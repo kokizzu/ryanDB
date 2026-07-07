@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	pb "github.com/ryansenn/quorum/proto/nodepb"
+	pb "github.com/ryanssenn/quorum/proto/nodepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
@@ -53,26 +55,41 @@ func (n *Node) StartClients() {
 		if err != nil {
 			log.Fatalf("%s dial: %v", n.Id, err)
 		}
-		client := pb.NewNodeClient(conn)
-		n.Clients[key] = client
+		n.Clients[key] = pb.NewNodeClient(conn)
+	}
 
-		for {
-			dummyReq := pb.VoteRequest{
-				Term:         -1,
-				CandidateId:  n.Id,
-				LastLogIndex: -1,
-				LastLogTerm:  -1,
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			_, err = client.RequestVote(ctx, &dummyReq)
-			cancel()
+	n.WaitForStartupQuorum()
+}
 
-			if err == nil {
-				break
-			}
+func (n *Node) WaitForStartupQuorum() {
+	quorum := len(n.Peers)/2 + 1
 
-			time.Sleep(200 * time.Millisecond)
+	for {
+		var reachable int32 = 1
+		var wg sync.WaitGroup
+		for _, client := range n.Clients {
+			wg.Add(1)
+			go func(client pb.NodeClient) {
+				defer wg.Done()
+				dummyReq := pb.VoteRequest{
+					Term:         -1,
+					CandidateId:  n.Id,
+					LastLogIndex: -1,
+					LastLogTerm:  -1,
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				defer cancel()
+				if _, err := client.RequestVote(ctx, &dummyReq); err == nil {
+					atomic.AddInt32(&reachable, 1)
+				}
+			}(client)
 		}
+		wg.Wait()
+
+		if int(reachable) >= quorum {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

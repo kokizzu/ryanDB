@@ -1,20 +1,20 @@
 # Quorum Internals Guide
 
-This guide explains what Raft is, how this project implements it, and how to read the Go source. For hands-on exploration, start with the [demo UI](observability.md) (`go run ./playground`; requires Docker Desktop).
+This guide explains what Raft is, how this project implements it, and how to read the Go source. For hands-on exploration, start with the [playground](../playground/README.md) (`go run ./playground`; requires Docker Desktop).
 
-Quorum is a learning project: it runs a real multi-node cluster, but it is not a production database.
+Quorum runs a real multi-node cluster, but it is not a production database.
 
 After reading this, you should understand why a cluster needs a leader, what the log and commit index mean, and which files to open when you want to trace a write from HTTP to disk.
 
-**Background assumed:** basic Go (structs, methods, goroutines) and familiarity with HTTP. No prior Raft knowledge required.
+Background assumed: basic Go (structs, methods, goroutines) and familiarity with HTTP. No prior Raft knowledge required.
 
 ---
 
 ## The problem Raft solves
 
-Imagine three servers that all store the same key-value data. A client sends `put foo=bar` to one server. If each server applied updates independently, they would drift apart after a network glitch or a crash. You need a rule that guarantees every server applies the **same commands in the same order**.
+Imagine three servers that all store the same key-value data. A client sends `put foo=bar` to one server. If each server applied updates independently, they would drift apart after a network glitch or a crash. You need a rule that guarantees every server applies the same commands in the same order.
 
-Raft solves this by electing a **leader**. All writes go through the leader first. The leader records each command in an append-only **log**, copies that log to other servers (**followers**), and only treats a command as final once a **majority** of servers have stored it. Followers replay the log in order into a **state machine**, a simple in-memory map.
+Raft solves this by electing a leader. All writes go through the leader first. The leader records each command in an append-only log, copies that log to other servers (followers), and only treats a command as final once a majority of servers have stored it. Followers replay the log in order into a state machine, a simple in-memory map.
 
 If the leader dies, the cluster holds a new election and continues from the replicated log. That is the core idea: one authoritative sequence of operations, replicated before it is considered done.
 
@@ -35,22 +35,22 @@ Raft papers use precise terms. This table maps each term to what it means in Quo
 
 | Concept | Meaning in Quorum | Where to look |
 |---------|-------------------|---------------|
-| **Term** | A monotonic election generation. Each election bumps the term. | `Node.Term` in `core/node.go` |
-| **Leader / Follower / Candidate** | Roles a node can hold. Followers accept entries; candidates ask for votes; the leader replicates. | `NodeState` in `core/node.go` |
-| **Log** | Ordered list of client commands (`put`, `get` metadata). Each entry has a term and a command. | `Node.Log`, `LogEntry` in `core/log.go` |
-| **Commit** | An entry is committed once a majority of servers have stored it at the same index. | `CommitIndex`, `UpdateCommitIndex` in `core/leader.go` |
-| **Apply** | Run a committed entry on the state machine (update the map). | `ApplyCommitted`, `Engine` in `core/storage.go` |
+| Term | A monotonic election generation. Each election bumps the term. | `Node.Term` in `core/node.go` |
+| Leader / Follower / Candidate | Roles a node can hold. Followers accept entries; candidates ask for votes; the leader replicates. | `NodeState` in `core/node.go` |
+| Log | Ordered list of client commands (`put`, `get` metadata). Each entry has a term and a command. | `Node.Log`, `LogEntry` in `core/log.go` |
+| Commit | An entry is committed once a majority of servers have stored it at the same index. | `CommitIndex`, `UpdateCommitIndex` in `core/leader.go` |
+| Apply | Run a committed entry on the state machine (update the map). | `ApplyCommitted`, `Engine` in `core/storage.go` |
 
-Two details matter for reading the code. **Commit** and **apply** are separate steps: an entry can be committed but not yet applied to the map. **Term** numbers increase on every election, even if no log entries change; they prevent stale leaders from making progress.
+Two details matter for reading the code. Commit and apply are separate steps: an entry can be committed but not yet applied to the map. Term numbers increase on every election, even if no log entries change; they prevent stale leaders from making progress.
 
 ---
 
 ## System architecture
 
-Each running process is one **node**. It exposes two network interfaces:
+Each running process is one node. It exposes two network interfaces:
 
-- **HTTP** on `--port`: what clients (and tests) call: `/get`, `/put`, `/status`, `/events`.
-- **gRPC** on the address listed for this node in `--peers`: Raft traffic only: votes, log replication, and forwarding client commands to the leader.
+- HTTP on `--port`: what clients (and tests) call: `/get`, `/put`, `/status`, `/events`.
+- gRPC on the address listed for this node in `--peers`: Raft traffic only: votes, log replication, and forwarding client commands to the leader.
 
 ```mermaid
 flowchart LR
@@ -58,7 +58,7 @@ flowchart LR
   MainGo --> Core[core.Node]
   Core -->|gRPC| PeerNodes[Other nodes]
   Core --> Storage[Engine in-memory map]
-  Core --> Disk["logs/*.rlog and *.meta"]
+  Core --> Disk["logs/*.rlog, *.meta, *.snap"]
 ```
 
 The HTTP layer in `main.go` is thin: it parses query parameters, builds a `Command`, and calls `node.HandleCommand`. All consensus logic lives in `core/`. RPC message shapes are defined in `node.proto` and generated into `proto/nodepb/`.
@@ -71,17 +71,17 @@ A typical cluster starts three or more nodes with the same `--peers` string but 
 
 Tracing one write shows how the pieces connect.
 
-1. **HTTP entry.** A `GET /put?key=k&value=v` hits `put()` in `main.go`, which calls `HandleCommand` with a `put` command.
+1. HTTP entry. A `GET /put?key=k&value=v` hits `put()` in `main.go`, which calls `HandleCommand` with a `put` command.
 
-2. **Routing by role.** In `HandleCommand` (`core/node.go`), followers do not write locally. They call `ForwardToLeader`, which sends the command over gRPC to the current leader. Candidates return `"Error: election"`. Only the leader proceeds.
+2. Routing by role. In `HandleCommand` (`core/node.go`), followers do not write locally. They call `ForwardToLeader`, which sends the command over gRPC to the current leader. Candidates return `"Error: election"`. Only the leader proceeds.
 
-3. **Append to the log.** The leader calls `Commit` (`core/leader.go`), which first `AppendLog`s the command. That appends to the in-memory slice and persists via `Logger.AppendLog` (`core/log.go`) to `logs/<node-id>.rlog`.
+3. Append to the log. The leader calls `Commit` (`core/leader.go`), which first `AppendLog`s the command. That appends to the in-memory slice and persists via `Logger.AppendLog` (`core/log.go`) to `logs/<node-id>.rlog`.
 
-4. **Replication.** When a node becomes leader, `StartReplicationWorkers` launches one goroutine per follower. Each loop in `ReplicateToFollower` sends `AppendEntries` RPCs (`core/rpc.go`) with new log entries and the current commit index. Followers append matching entries and reply success or failure; on failure the leader decrements `nextIndex` and retries.
+4. Replication. When a node becomes leader, `StartReplicationWorkers` launches one goroutine per follower. Each loop in `ReplicateToFollower` sends `AppendEntries` RPCs (`core/rpc.go`) with new log entries and the current commit index. Followers append matching entries and reply success or failure; on failure the leader decrements `nextIndex` and retries.
 
-5. **Commit.** After a follower acknowledges entries, the leader updates `matchIndex` and calls `UpdateCommitIndex`. An index becomes committed when a majority of servers have replicated it **and** the entry’s term equals the leader’s current term. The leader applies committed entries, then wakes any goroutines blocked in `Commit`.
+5. Commit. After a follower acknowledges entries, the leader updates `matchIndex` and calls `UpdateCommitIndex`. An index becomes committed when a majority of servers have replicated it and the entry's term equals the leader's current term. The leader applies committed entries, then wakes any goroutines blocked in `Commit`.
 
-6. **Response.** `Commit` returns only after the entry is both committed and applied to `Engine`. The HTTP handler returns `"success"`.
+6. Response. `Commit` returns only after the entry is both committed and applied to `Engine`. The HTTP handler returns `"success"`.
 
 ```mermaid
 sequenceDiagram
@@ -112,11 +112,11 @@ On the leader, `Get` (`core/node.go`) waits until `LastApplied` catches up to `C
 
 ## Leader election
 
-Every follower runs an election timer (`StartElectionTimer` in `core/node.go`). If the timer fires and the node is still a follower, it becomes a **candidate**, increments its term, votes for itself, and sends `RequestVote` RPCs to every other node.
+Every follower runs an election timer (`StartElectionTimer` in `core/node.go`). If the timer fires and the node is still a follower, it becomes a candidate, increments its term, votes for itself, and sends `RequestVote` RPCs to every other node.
 
-A follower grants a vote if the candidate’s log is at least as up-to-date as its own and it has not voted for someone else in this term. If the candidate receives votes from a **majority**, it becomes leader and starts replication workers.
+A follower grants a vote if the candidate's log is at least as up-to-date as its own and it has not voted for someone else in this term. If the candidate receives votes from a majority, it becomes leader and starts replication workers.
 
-While a leader is healthy, it sends periodic `AppendEntries` heartbeats (often with zero new entries). Each heartbeat calls `ReceiveHeartbeat`, which resets the follower’s election timer. Timeouts are randomized between 600 ms and 1000 ms so two followers rarely start elections at the same moment, a simple way to reduce split votes.
+While a leader is healthy, it sends periodic `AppendEntries` heartbeats (often with zero new entries). Each heartbeat calls `ReceiveHeartbeat`, which resets the follower's election timer. Timeouts are randomized between 600 ms and 1000 ms so two followers rarely start elections at the same moment, a simple way to reduce split votes.
 
 If the leader stops, timers expire, a new leader is elected, and replication continues from the shared log. The `/status` endpoint exposes `state` (0=follower, 1=candidate, 2=leader), `term`, and `leaderId` for debugging.
 
@@ -124,10 +124,11 @@ If the leader stops, timers expire, a new leader is elected, and replication con
 
 ## Persistence and recovery
 
-Each node persists two kinds of data under `logs/`:
+Each node persists data under `logs/`:
 
-- **`<id>.rlog`**: append-only log entries (term + command).
-- **`<id>.meta`**: current term and who this node voted for.
+- `<id>.rlog`: append-only log entries (term + command).
+- `<id>.meta`: current term and who this node voted for.
+- `<id>.snap`: state-machine snapshot written during log compaction.
 
 On startup with `--reset=false`, `RecoverState` reloads the log and metadata, replays entries into the in-memory map, and rejoins the cluster. With `--reset=true`, files are truncated for a fresh cluster.
 
@@ -139,13 +140,13 @@ Integration tests in `test/` start real subprocesses, kill nodes, restart them, 
 
 Quorum uses standard Go concurrency tools. You do not need to master all of them before reading, but recognizing them helps.
 
-**Goroutines** run the election timer loop and one replication worker per follower. They share the `Node` struct with HTTP handlers and gRPC callbacks, so access to shared fields must be coordinated.
+Goroutines run the election timer loop and one replication worker per follower. They share the `Node` struct with HTTP handlers and gRPC callbacks, so access to shared fields must be coordinated.
 
-**`sync.Mutex`** protects the log slice (`LogMu`) and apply logic (`ApplyMu`). **`sync.Cond`** lets `Commit` and `Get` block until commit or apply indices advance, then wake when `Broadcast` is called.
+`sync.Mutex` protects the log slice (`LogMu`) and apply logic (`ApplyMu`). `sync.Cond` lets `Commit` and `Get` block until commit or apply indices advance, then wake when `Broadcast` is called.
 
-**`atomic` types** store term, commit index, last applied index, and pointer strings like leader id so HTTP handlers can read status without holding the log mutex for long.
+`atomic` types store term, commit index, last applied index, and pointer strings like leader id so HTTP handlers can read status without holding the log mutex for long.
 
-**gRPC** handles node-to-node RPCs. `node.proto` defines the service; `protoc` generates `proto/nodepb/node.pb.go` and `node_grpc.pb.go`. The server implementation is the `server` type in `core/rpc.go`.
+gRPC handles node-to-node RPCs. `node.proto` defines the service; `protoc` generates `proto/nodepb/node.pb.go` and `node_grpc.pb.go`. The server implementation is the `server` type in `core/rpc.go`.
 
 ---
 
@@ -153,43 +154,43 @@ Quorum uses standard Go concurrency tools. You do not need to master all of them
 
 Read in this order the first time you walk through the source. Allow 30–45 minutes.
 
-1. **`main.go`**: Flags, HTTP handlers, how a node is created and initialized.
-2. **`core/node.go`**: The `Node` struct, roles, `HandleCommand`, election timer, `ForwardToLeader`, apply and get.
-3. **`core/leader.go`**: `AppendLog`, `Commit`, `ReplicateToFollower`, `UpdateCommitIndex`.
-4. **`core/rpc.go`**: `AppendEntries` and `RequestVote` handlers; where followers accept replicated data.
-5. **`core/log.go`** and **`core/storage.go`**: Persistence format and the key-value state machine.
-6. **`core/node_test.go`**: Short tests that show commit/apply and voting rules in isolation.
-7. **`test/integration_test.go`**: Full cluster scenarios: election, replication, persistence, partitions.
+1. `main.go`: Flags, HTTP handlers, how a node is created and initialized.
+2. `core/node.go`: The `Node` struct, roles, `HandleCommand`, election timer, `ForwardToLeader`, apply and get.
+3. `core/leader.go`: `AppendLog`, `Commit`, `ReplicateToFollower`, `UpdateCommitIndex`.
+4. `core/rpc.go`: `AppendEntries` and `RequestVote` handlers; where followers accept replicated data.
+5. `core/log.go` and `core/storage.go`: Persistence format and the key-value state machine.
+6. `core/node_test.go`: Short tests that show commit/apply and voting rules in isolation.
+7. `test/integration_test.go`: Full cluster scenarios: election, replication, persistence, partitions.
 
-Optional after that: the [demo UI](observability.md) for metrics during scenario runs, and `benchmarks/` for throughput and latency numbers.
+Optional after that: the [playground](../playground/README.md) for metrics during scenario runs, and [benchmarks/REPORT.md](benchmarks/REPORT.md) for throughput and latency numbers.
 
 ---
 
 ## How to explore
 
-**Demo UI (recommended).**
+Playground (recommended):
 
 ```bash
 go run ./playground playground/scenarios/leader-failure.json
 ```
 
-Run scenarios against a real cluster and watch Raft metrics. See [observability.md](observability.md).
+Run scenarios against a real cluster and watch Raft metrics. See [observability.md](observability.md) for the metrics reference.
 
-**Run a cluster manually.** Build and start three nodes as shown in the [README](../README.md). Send writes to any node; reads and writes reach the leader automatically.
+Run a cluster manually. Build and start three nodes as shown in the [README](../README.md). Send writes to any node; reads and writes reach the leader automatically.
 
-**Integration tests.**
+Integration tests:
 
 ```bash
 go test -v ./test
 ```
 
-**Unit tests (fast, no subprocesses).**
+Unit tests (fast, no subprocesses):
 
 ```bash
 go test -v ./core
 ```
 
-**Scenario-driven demo.**
+Scenario-driven demo:
 
 ```bash
 go run ./playground playground/scenarios/steady-writes.json
@@ -203,13 +204,13 @@ Auto-starts a cluster and runs the scenario. See [playground/README.md](../playg
 
 Quorum deliberately stops where a production system would keep going:
 
-- **Dynamic membership**: peer list is fixed at startup.
-- **Full linearizable reads**: reads use a simplified leader-based path.
-- **Segmented log files**: compaction rewrites a single `.rlog` rather than rotating segments.
+- Dynamic membership: peer list is fixed at startup.
+- Full linearizable reads: reads use a simplified leader-based path.
+- Segmented log files: compaction rewrites a single `.rlog` rather than rotating segments.
 
-Log compaction and snapshots *are* implemented: the applied prefix is folded into a snapshot, the log is truncated, and a far-behind follower is caught up with an `InstallSnapshot` RPC. See [`core/snapshot.go`](../core/snapshot.go).
+Log compaction and snapshots are implemented: the applied prefix is folded into a snapshot, the log is truncated, and a far-behind follower is caught up with an `InstallSnapshot` RPC. See [`core/snapshot.go`](../core/snapshot.go).
 
-For performance numbers on a single machine, see [benchmarks/REPORT.md](../benchmarks/REPORT.md). That report is optional context, not required for understanding the code.
+For performance numbers on a single machine, see [benchmarks/REPORT.md](benchmarks/REPORT.md). That report is optional context, not required for understanding the code.
 
 ---
 

@@ -154,6 +154,10 @@ export class Renderer {
         card.classList.toggle("leader", role === "leader");
         card.classList.toggle("partitioned", part);
         card.dataset.role = role;
+        card.setAttribute(
+          "aria-label",
+          `${node.id}: ${part ? "isolated" : role}${node.running ? "" : idle ? ", not started" : ", crashed"}`
+        );
 
         const roleEl = card.querySelector(".node-role");
         roleEl.textContent = part
@@ -299,6 +303,8 @@ export class Renderer {
     const card = document.createElement("div");
     card.className = "node-card";
     card.dataset.node = id;
+    card.setAttribute("role", "group");
+    card.setAttribute("aria-label", `Raft node ${id}`);
     card.innerHTML = `
       <div class="node-card-inner">
         <div class="node-head">
@@ -317,8 +323,8 @@ export class Renderer {
           <ul class="node-writes"></ul>
         </div>
         <div class="node-actions running">
-          <button type="button" class="node-action stop" data-action="stop">Crash node</button>
-          <button type="button" class="node-action start" data-action="start">Start node</button>
+          <button type="button" class="node-action stop" data-action="stop" aria-label="Crash node ${id}">Crash node</button>
+          <button type="button" class="node-action start" data-action="start" aria-label="Start node ${id}">Start node</button>
         </div>
       </div>
     `;
@@ -420,38 +426,60 @@ function escapeHtml(s) {
   );
 }
 
-function cardRadius(scale) {
-  return 52 * (scale || 1);
+const NODE_HALF_W = 88; // .node-card width 176px
+const NODE_HALF_H = 86; // layout CARD 172px
+const CLIENT_HALF_W = 42;
+const CLIENT_HALF_H = 16;
+
+function entityHalf(entity) {
+  const s = entity.scale || 1;
+  if (entity.role === "client") {
+    return { w: CLIENT_HALF_W * s, h: CLIENT_HALF_H * s };
+  }
+  return { w: NODE_HALF_W * s, h: NODE_HALF_H * s };
+}
+
+/** Ray from center to the rectangle edge in direction (dx, dy). */
+function boxEdge(center, halfW, halfH, dx, dy) {
+  const dist = Math.hypot(dx, dy) || 1;
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const t = Math.min(halfW / (Math.abs(nx) || 1e-9), halfH / (Math.abs(ny) || 1e-9));
+  return { x: center.x + nx * t, y: center.y + ny * t };
+}
+
+/** Edge point on `from` facing `to`, and edge point on `to` facing `from`. */
+export function linkPoints(from, to) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const fromHalf = entityHalf(from);
+  const toHalf = entityHalf(to);
+  return {
+    from: boxEdge(from, fromHalf.w, fromHalf.h, dx, dy),
+    to: boxEdge(to, toHalf.w, toHalf.h, -dx, -dy),
+  };
+}
+
+/** Client widget → node card (same edge math as beams). */
+export function clientLinkPoints(client, to) {
+  return linkPoints(client, to);
 }
 
 function beamPath(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
+  const { from: p1, to: p2 } = linkPoints(from, to);
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
   const dist = Math.hypot(dx, dy) || 1;
   const nx = dx / dist;
   const ny = dy / dist;
-  const fromR = cardRadius(from.scale);
-  const toR = cardRadius(to.scale);
-  const x1 = from.x + nx * fromR;
-  const y1 = from.y + ny * fromR;
-  const x2 = to.x - nx * toR;
-  const y2 = to.y - ny * toR;
-  const mx = (x1 + x2) / 2 - ny * 24;
-  const my = (y1 + y2) / 2 + nx * 24;
-  return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+  const mx = (p1.x + p2.x) / 2 - ny * 24;
+  const my = (p1.y + p2.y) / 2 + nx * 24;
+  return `M ${p1.x} ${p1.y} Q ${mx} ${my} ${p2.x} ${p2.y}`;
 }
 
 function clientBeamPath(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const dist = Math.hypot(dx, dy) || 1;
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const x1 = from.x + cardRadius(from.scale) * 0.85;
-  const y1 = from.y;
-  const x2 = to.x - nx * cardRadius(to.scale);
-  const y2 = to.y - ny * cardRadius(to.scale);
-  return `M ${x1} ${y1} L ${x2} ${y2}`;
+  const { from: p1, to: p2 } = clientLinkPoints(from, to);
+  return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
 }
 
 export { SVG_NS };
