@@ -1,6 +1,6 @@
 {
   "name": "Leader Failure & Recovery",
-  "nodes": 5,
+  "nodes": 7,
   "steps": [
     { "wait": "2s" },
     { "put": { "node": "node2", "key": "fail:1", "value": "before" } },

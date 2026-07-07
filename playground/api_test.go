@@ -190,8 +190,8 @@ func TestLoadScenarioPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sc.Nodes != 5 {
-		t.Fatalf("expected 5 nodes, got %d", sc.Nodes)
+	if sc.Nodes != 7 {
+		t.Fatalf("expected 7 nodes, got %d", sc.Nodes)
 	}
 }
 

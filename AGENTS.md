@@ -27,4 +27,4 @@ Running a cluster manually: each node needs a free HTTP port (`--port`, e.g. 800
 `./quorum --id=node1 --port=8001 --peers=node1=127.0.0.1:9001,node2=127.0.0.1:9002,node3=127.0.0.1:9003 --reset=true`
 Use `--reset=false` on restarts to keep persisted logs. HTTP API: `GET /put?key=&value=`, `GET /get?key=`, `GET /status`, `GET /metrics`.
 
-Playground gotchas: it calls `harness.KillPorts` on 8001-8005/9001-9005 at cluster create/start, so do not run it alongside a manually started cluster on those ports.
+Playground gotchas: it calls `harness.KillPorts` on 8001-8009/9001-9009 at cluster create/start, so do not run it alongside a manually started cluster on those ports.

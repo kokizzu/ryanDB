@@ -53,26 +53,7 @@ func (n *Node) StartClients() {
 		if err != nil {
 			log.Fatalf("%s dial: %v", n.Id, err)
 		}
-		client := pb.NewNodeClient(conn)
-		n.Clients[key] = client
-
-		for {
-			dummyReq := pb.VoteRequest{
-				Term:         -1,
-				CandidateId:  n.Id,
-				LastLogIndex: -1,
-				LastLogTerm:  -1,
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			_, err = client.RequestVote(ctx, &dummyReq)
-			cancel()
-
-			if err == nil {
-				break
-			}
-
-			time.Sleep(200 * time.Millisecond)
-		}
+		n.Clients[key] = pb.NewNodeClient(conn)
 	}
 }
 

@@ -56,7 +56,7 @@ type WriteEvent struct {
 
 func NewServer(binaryPath, repoRoot string, composeEnabled bool) *Server {
 	return &Server{
-		cluster:        NewCluster(5),
+		cluster:        NewCluster(7),
 		binaryPath:     binaryPath,
 		repoRoot:       repoRoot,
 		composeEnabled: composeEnabled,
@@ -142,7 +142,16 @@ func (srv *Server) logSnapshot() []string {
 	return append([]string(nil), srv.scenarioLog...)
 }
 
+func (c *Cluster) reconcileRunning() {
+	for _, node := range c.Nodes {
+		if node.Running && !node.alive() {
+			node.Running = false
+		}
+	}
+}
+
 func (srv *Server) clusterStatusLocked() []NodeStatus {
+	srv.cluster.reconcileRunning()
 	var statuses []NodeStatus
 	for _, node := range srv.cluster.Nodes {
 		ns := NodeStatus{ID: node.ID, Running: node.Running}
@@ -151,10 +160,10 @@ func (srv *Server) clusterStatusLocked() []NodeStatus {
 			if err != nil {
 				ns.Reachable = false
 			} else {
+				st.ID = node.ID
 				st.Running = true
 				st.Reachable = true
 				ns = *st
-				ns.Running = true
 			}
 		}
 		statuses = append(statuses, ns)
@@ -189,6 +198,7 @@ func (srv *Server) handleClusterLogs(w http.ResponseWriter, r *http.Request) {
 	const tail = 8
 
 	srv.mu.RLock()
+	srv.cluster.reconcileRunning()
 	nodes := append([]*ClusterNode(nil), srv.cluster.Nodes...)
 	srv.mu.RUnlock()
 
@@ -491,7 +501,7 @@ func (srv *Server) handleStressTest(w http.ResponseWriter, r *http.Request) {
 	}
 	nodeCount := req.Nodes
 	if nodeCount <= 0 {
-		nodeCount = 5
+		nodeCount = 7
 	}
 
 	scenario := &Scenario{
@@ -658,10 +668,13 @@ func (srv *Server) handleNodeStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "node not found", http.StatusNotFound)
 		return
 	}
-	if node.Running {
-		json.NewEncoder(w).Encode(map[string]any{"ok": true, "running": true})
-		return
+	if node.Running && node.alive() {
+		if _, err := fetchStatus(node.Port); err == nil {
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "running": true})
+			return
+		}
 	}
+	node.Stop()
 	if !started {
 		http.Error(w, "cluster not started", http.StatusBadRequest)
 		return

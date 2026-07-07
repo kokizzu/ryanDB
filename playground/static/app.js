@@ -12,7 +12,7 @@ const replFx = new AnimationEngine(document.getElementById("layer-flows"));
 
 let liveCharts = null;
 let topologyBounds = { width: 1000, height: 420 };
-let selectedNodes = 5;
+let selectedNodes = 7;
 let lastLayoutSig = "";
 let lastScenarioSig = "";
 let lastMetricsStatsSig = "";
@@ -393,8 +393,20 @@ function updateStatus(data, scenario) {
   idleOverlay?.classList.toggle("hidden", stressActive || data.clusterStarted);
 
   const writeCount = scenario?.writeCount ?? 0;
+  const clusterSize = nodes.length || selectedNodes;
+  const quorum = quorumNeeded(clusterSize);
+  const quorumWarning = document.getElementById("quorum-warning");
+  if (quorumWarning) {
+    const belowQuorum = data.clusterStarted && running.length < quorum;
+    quorumWarning.classList.toggle("hidden", !belowQuorum);
+    if (belowQuorum) {
+      quorumWarning.textContent =
+        `Need at least ${quorum} of ${clusterSize} nodes for replication`;
+    }
+  }
+
   document.getElementById("topology-stats").textContent = data.clusterStarted
-    ? `${running.length}/${nodes.length} up · quorum ${quorumNeeded(nodes.length || selectedNodes)} · ${writeCount} writes`
+    ? `${running.length}/${nodes.length} up · quorum ${quorum} · ${writeCount} writes`
     : "";
   updateSidebarCluster({
     writeCount,

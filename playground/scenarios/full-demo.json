@@ -1,6 +1,6 @@
 {
   "name": "Stress test",
-  "nodes": 5,
+  "nodes": 7,
   "realtime": true,
   "steps": [
     { "wait": "2s", "comment": "leader election" },

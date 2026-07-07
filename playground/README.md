@@ -12,7 +12,7 @@ Web UI for quorum. Boots a Raft cluster, runs stress test scenarios, and shows t
 go run ./playground
 ```
 
-Opens http://localhost:8080. Click Run stress test to start a 5-node cluster with 32 concurrent writers, node failures, and leader failover.
+Opens http://localhost:8080. Click Run stress test to start a 7-node cluster with 32 concurrent writers, node failures, and leader failover.
 
 Use `--bootstrap` to auto-start the cluster (the stress test still waits for the button).
 

@@ -510,6 +510,16 @@ html, body {
   color: var(--amber);
 }
 
+.quorum-warning {
+  font-size: 0.6875rem;
+  color: #bf9b54;
+  white-space: nowrap;
+}
+
+.quorum-warning.hidden {
+  display: none;
+}
+
 .node-hint {
   margin: 0;
   padding: 0.35rem 1rem;

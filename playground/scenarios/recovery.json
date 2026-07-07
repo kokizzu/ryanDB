@@ -1,6 +1,6 @@
 {
   "name": "Recovery",
-  "nodes": 5,
+  "nodes": 7,
   "steps": [
     { "wait": "2s", "comment": "wait for election" },
     { "put": { "node": "node1", "key": "rec:1", "value": "one" } },

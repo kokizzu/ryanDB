@@ -75,8 +75,8 @@
             <span>Nodes</span>
             <div class="segmented" id="node-segments">
               <button type="button" data-n="3">3</button>
-              <button type="button" data-n="5" class="active">5</button>
-              <button type="button" data-n="7">7</button>
+              <button type="button" data-n="5">5</button>
+              <button type="button" data-n="7" class="active">7</button>
               <button type="button" data-n="9">9</button>
             </div>
           </label>
@@ -115,6 +115,7 @@
           <div class="section-head-left">
             <span id="phase-banner" class="phase-label hidden"></span>
             <span id="partition-badge" class="badge hidden">partition</span>
+            <span id="quorum-warning" class="quorum-warning hidden"></span>
           </div>
           <div class="section-head-right">
             <div id="hero-rate" class="hero-rate hidden">
@@ -128,7 +129,7 @@
         <p id="node-hint" class="node-hint hidden">Click the red <strong>Crash node</strong> button on any node to simulate a failure. Stopped nodes show <strong>Start node</strong> to recover.</p>
         <div class="topology-canvas" id="topology-canvas">
           <div id="topology-idle" class="topology-idle">
-            <p class="idle-copy">Start the stress test to boot a 5-node cluster with continuous reads and writes. Adjust rates above, then stop anytime.</p>
+            <p class="idle-copy">Start the stress test to boot a 7-node cluster with continuous reads and writes. Adjust rates above, then stop anytime.</p>
           </div>
           <svg id="topology-svg" preserveAspectRatio="none">
             <rect width="100%" height="100%" fill="#0c0c0e"/>

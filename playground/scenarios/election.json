@@ -1,6 +1,6 @@
 {
   "name": "Leader Election",
-  "nodes": 5,
+  "nodes": 7,
   "steps": [
     { "wait": "2s", "comment": "wait for initial election" },
     { "kill": "leader", "comment": "trigger re-election" },

@@ -1,6 +1,6 @@
 {
   "name": "Raft Demo Loop",
-  "nodes": 5,
+  "nodes": 7,
   "showcase": true,
   "loop": true,
   "durationMs": 60000,

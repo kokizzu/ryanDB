@@ -1,6 +1,6 @@
 {
   "name": "Raft in Action",
-  "nodes": 5,
+  "nodes": 7,
   "steps": [
     { "wait": "3s", "comment": "initial leader election" },
     { "put": { "node": "node3", "key": "user:1", "value": "alice" }, "comment": "write via follower" },

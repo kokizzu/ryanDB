@@ -85,16 +85,32 @@ func (n *ClusterNode) Start(binary, reset string) error {
 	}
 	n.Cmd = cmd
 	n.Running = true
+	go func(c *exec.Cmd) {
+		_ = c.Wait()
+		// Only clear if this process is still the tracked one. Stop() may have
+		// already reaped it and started a replacement.
+		if n.Cmd == c {
+			n.Cmd = nil
+			n.Running = false
+		}
+	}(cmd)
 	return nil
+}
+
+func (n *ClusterNode) alive() bool {
+	if !n.Running || n.Cmd == nil || n.Cmd.Process == nil {
+		return false
+	}
+	return n.Cmd.ProcessState == nil
 }
 
 func (n *ClusterNode) Stop() {
 	if n.Cmd != nil && n.Cmd.Process != nil {
 		_ = n.Cmd.Process.Kill()
-		n.Running = false
 		_ = n.Cmd.Wait()
 		n.Cmd = nil
 	}
+	n.Running = false
 }
 
 func (n *ClusterNode) Restart(binary string) error {
