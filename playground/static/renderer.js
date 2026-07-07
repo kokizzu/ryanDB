@@ -154,6 +154,10 @@ export class Renderer {
         card.classList.toggle("leader", role === "leader");
         card.classList.toggle("partitioned", part);
         card.dataset.role = role;
+        card.setAttribute(
+          "aria-label",
+          `${node.id}: ${part ? "isolated" : role}${node.running ? "" : idle ? ", not started" : ", crashed"}`
+        );
 
         const roleEl = card.querySelector(".node-role");
         roleEl.textContent = part
@@ -299,6 +303,8 @@ export class Renderer {
     const card = document.createElement("div");
     card.className = "node-card";
     card.dataset.node = id;
+    card.setAttribute("role", "group");
+    card.setAttribute("aria-label", `Raft node ${id}`);
     card.innerHTML = `
       <div class="node-card-inner">
         <div class="node-head">
@@ -317,8 +323,8 @@ export class Renderer {
           <ul class="node-writes"></ul>
         </div>
         <div class="node-actions running">
-          <button type="button" class="node-action stop" data-action="stop">Crash node</button>
-          <button type="button" class="node-action start" data-action="start">Start node</button>
+          <button type="button" class="node-action stop" data-action="stop" aria-label="Crash node ${id}">Crash node</button>
+          <button type="button" class="node-action start" data-action="start" aria-label="Start node ${id}">Start node</button>
         </div>
       </div>
     `;

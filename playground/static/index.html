@@ -19,7 +19,7 @@
   </div>
 
   <div id="app" class="app hidden">
-    <aside class="sidebar">
+    <aside class="sidebar" aria-label="Playground controls and cluster summary">
       <header class="sidebar-brand">
         <span id="live-dot" class="live-dot"></span>
         <div>
@@ -54,7 +54,7 @@
             <span class="sm-spark-label">Write throughput</span>
             <strong class="sm-spark-value" id="sm-spark-value">-</strong>
           </div>
-          <canvas id="sm-spark" class="sm-spark"></canvas>
+          <canvas id="sm-spark" class="sm-spark" role="img" aria-label="Recent write throughput sparkline"></canvas>
         </div>
 
         <div class="sm-grid">
@@ -110,7 +110,7 @@
     </aside>
 
     <main class="main">
-      <section class="topology-section">
+      <section class="topology-section" aria-label="Cluster topology and node controls">
         <header class="section-head">
           <div class="section-head-left">
             <span id="phase-banner" class="phase-label hidden"></span>
@@ -127,11 +127,11 @@
           </div>
         </header>
         <p id="node-hint" class="node-hint hidden">Click the red <strong>Crash node</strong> button on any node to simulate a failure. Stopped nodes show <strong>Start node</strong> to recover.</p>
-        <div class="topology-canvas" id="topology-canvas">
+        <div class="topology-canvas" id="topology-canvas" role="region" aria-label="Raft cluster topology">
           <div id="topology-idle" class="topology-idle">
             <p class="idle-copy">Start the stress test to boot a 7-node cluster with continuous reads and writes. Adjust rates above, then stop anytime.</p>
           </div>
-          <svg id="topology-svg" preserveAspectRatio="none">
+          <svg id="topology-svg" preserveAspectRatio="none" aria-hidden="true">
             <rect width="100%" height="100%" fill="#0c0c0e"/>
             <g id="layer-beams"></g>
           </svg>
@@ -140,7 +140,7 @@
               <span class="leader-slot-label">Leader</span>
             </div>
             <div id="leader-toast" class="leader-toast hidden" aria-live="polite"></div>
-            <svg id="topology-flows" class="topology-flows" preserveAspectRatio="none">
+            <svg id="topology-flows" class="topology-flows" preserveAspectRatio="none" aria-hidden="true">
               <g id="layer-flows"></g>
             </svg>
             <div id="fx-layer" class="fx-layer"></div>
@@ -153,7 +153,7 @@
         </div>
       </section>
 
-      <section class="charts-section">
+      <section class="charts-section" aria-label="Live cluster metrics">
         <div class="charts-head">
           <div class="stats-row">
             <span>Write <strong id="stat-write-ops">-</strong></span>
@@ -165,12 +165,12 @@
           </div>
           <a class="charts-link" id="grafana-open-link" href="http://localhost:3000/d/playground-live/playground-live?kiosk" target="_blank" rel="noopener">Grafana</a>
         </div>
-        <div id="live-charts" class="live-charts-grid"></div>
+        <div id="live-charts" class="live-charts-grid" role="group" aria-label="Live metric charts"></div>
         <p id="grafana-hint" class="grafana-hint hidden">Grafana panels also available when Docker is running.</p>
       </section>
 
-      <section class="log-section">
-        <div id="event-log" class="event-log"></div>
+      <section class="log-section" aria-label="Scenario event log">
+        <div id="event-log" class="event-log" role="log" aria-live="polite" aria-label="Latest scenario event"></div>
       </section>
     </main>
   </div>
