@@ -88,3 +88,46 @@ func TestLeaderCrashReelection(t *testing.T) {
 	}
 	t.Logf("new leader %s at term %d", newLeader.Id, newLeader.Term.Load())
 }
+
+func TestRestartedMajorityElectsWithOfflinePeers(t *testing.T) {
+	peers := map[string]string{
+		"node1": "localhost:19201",
+		"node2": "localhost:19202",
+		"node3": "localhost:19203",
+		"node4": "localhost:19204",
+		"node5": "localhost:19205",
+	}
+	t.Chdir(t.TempDir())
+
+	nodes := map[string]*Node{}
+	for _, id := range []string{"node1", "node2", "node3"} {
+		n := NewNode(id, peers)
+		n.Logger.ClearData()
+		n.Events = nil
+		nodes[id] = n
+		n.StartServer()
+	}
+
+	startedClients := make(chan string, len(nodes))
+	for _, n := range nodes {
+		go func(n *Node) {
+			n.StartClients()
+			startedClients <- n.Id
+		}(n)
+	}
+
+	for range nodes {
+		select {
+		case <-startedClients:
+		case <-time.After(2 * time.Second):
+			t.Fatal("StartClients blocked waiting for offline configured peers")
+		}
+	}
+	for _, n := range nodes {
+		go n.StartElectionTimer()
+	}
+
+	if leader := waitForElectedLeader(nodes, 1, "", 6*time.Second); leader == nil {
+		t.Fatal("restarted majority did not elect a leader with two configured peers offline")
+	}
+}

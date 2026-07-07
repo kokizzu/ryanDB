@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	pb "github.com/ryanssenn/quorum/proto/nodepb"
@@ -54,6 +56,40 @@ func (n *Node) StartClients() {
 			log.Fatalf("%s dial: %v", n.Id, err)
 		}
 		n.Clients[key] = pb.NewNodeClient(conn)
+	}
+
+	n.WaitForStartupQuorum()
+}
+
+func (n *Node) WaitForStartupQuorum() {
+	quorum := len(n.Peers)/2 + 1
+
+	for {
+		var reachable int32 = 1
+		var wg sync.WaitGroup
+		for _, client := range n.Clients {
+			wg.Add(1)
+			go func(client pb.NodeClient) {
+				defer wg.Done()
+				dummyReq := pb.VoteRequest{
+					Term:         -1,
+					CandidateId:  n.Id,
+					LastLogIndex: -1,
+					LastLogTerm:  -1,
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				defer cancel()
+				if _, err := client.RequestVote(ctx, &dummyReq); err == nil {
+					atomic.AddInt32(&reachable, 1)
+				}
+			}(client)
+		}
+		wg.Wait()
+
+		if int(reachable) >= quorum {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

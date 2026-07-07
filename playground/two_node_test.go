@@ -15,10 +15,7 @@ import (
 	"github.com/ryanssenn/quorum/internal/harness"
 )
 
-// With 7 configured peers, a leader elected at full size keeps its role after
-// followers are stopped. It cannot commit new entries without a majority of
-// match indexes, but it still reports state=leader.
-func TestTwoRunningNodesKeepPriorLeader(t *testing.T) {
+func TestTwoRunningNodesCannotCommitWithoutQuorum(t *testing.T) {
 	repoRoot := findRepoRoot()
 	binaryPath := filepath.Join(repoRoot, "quorum")
 	build := exec.Command("go", "build", "-o", binaryPath, ".")
@@ -64,13 +61,21 @@ func TestTwoRunningNodesKeepPriorLeader(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 	st := getStatus(t, ts.URL)
-	if countLeaders(st.Nodes) != 1 {
-		t.Fatalf("expected prior leader to remain, got: %+v", st.Nodes)
+	running := 0
+	for _, node := range st.Nodes {
+		if node.Running {
+			running++
+		}
+	}
+	if running != 2 {
+		t.Fatalf("expected 2 running nodes, got %d: %+v", running, st.Nodes)
 	}
 
-	result, err := doPut("8001", "k", "v", "test")
-	if err != nil {
-		t.Fatal(err)
+	for _, port := range []string{"8001", "8002"} {
+		result, err := doPut(port, "k", "v", "test")
+		if err == nil && result == "success" {
+			t.Fatalf("put through %s succeeded below quorum: %+v", port, st.Nodes)
+		}
+		t.Logf("put through %s below quorum: result=%q err=%v", port, result, err)
 	}
-	t.Logf("put with 2 live nodes (leader retained): %q", result)
 }
